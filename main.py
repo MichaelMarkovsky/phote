@@ -2,6 +2,8 @@ from features.raw_processing import load_raw_image
 from features.perspective import detect_document, warp
 import cv2 as cv
 import os
+from pathlib import Path
+import shutil
 
 from textual.app import App
 from textual.widgets import Footer,Static
@@ -76,17 +78,40 @@ class phote(App):
         
         tree.show_root = False
 
-        files = get_photos(".")
+        base_path = os.path.abspath(".")
 
-        for file in files:
-            tree.root.add_leaf(file)
+        for file in get_photos(base_path):
+            full_path = os.path.join(base_path, file)
+
+            tree.root.add_leaf(file, data=full_path)
 
         return tree
 
+    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
+        path = event.node.data
 
-        # This is an action method. (name starts with action)
+        if not path:
+            return
+
+        # Create tmp folder if not exists
+        folder_path = Path("./temp")
+        # exist_ok=True: does nothing if the folder already exists
+        folder_path.mkdir(exist_ok=True)
+
+        img = load_raw_image(path)
+        cv.imwrite('./temp/preview.jpg', img)
+
+
+  
+    # This is an action method. (name starts with action)
+    # When i press q i then shutdown and exit the program
     def action_quit(self):
-        self.log("Quitting app")
+        # Delete the temp folder
+        temp_dir = "./temp"
+
+        if os.path.isdir(temp_dir):  
+            shutil.rmtree(temp_dir)
+
         self.exit()
 
 
