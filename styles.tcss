@@ -1,0 +1,38 @@
+* {
+   background: transparent;
+}
+
+Screen {
+    background: transparent;
+}
+
+#app-grid {
+    layout: grid;
+    grid-size: 2;  /* two columns */
+    grid-columns: 1fr 2fr;
+    grid-rows: 1fr;
+    background: transparent;
+}
+
+#left-pane {
+    width: 100%;
+    height: 100%;
+    border: dodgerblue;
+}
+
+#right-pane {
+    width: 100%;
+    height: 100%;
+    border: mediumvioletred;
+}
+
+#preview {
+    background: transparent;
+}
+
+
+Tree > .tree--cursor {
+    background: #a6c36f;      /* soft green */
+    color: #1a1a1a;
+    padding: 0 1;    
+}

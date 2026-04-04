@@ -7,6 +7,7 @@ from textual.app import App
 from textual.widgets import Footer,Static
 from textual.widgets import Tree
 
+from textual.containers import Container, Horizontal, VerticalScroll
 
 # ---------- LOAD ----------
 #img = load_raw_image("IMG_9095.CR3")
@@ -40,6 +41,8 @@ def get_photos(path):
 
 
 class phote(App):
+    CSS_PATH = "styles.tcss"
+
     BINDINGS = [
         #(key, action name, description),
 
@@ -49,9 +52,13 @@ class phote(App):
     def compose(self):
         self.status = Static("Ready")
         self.photo_tree = self.photo_list()
-
+        
+        with Container(id="app-grid"):
+             with VerticalScroll(id="left-pane"):
+                yield self.photo_tree
+             with Horizontal(id="right-pane"):
+                yield Static("Preview",id="preview")
         # Widgets
-        yield self.photo_tree
         yield self.status
         yield Footer()
 
@@ -60,9 +67,12 @@ class phote(App):
         files = get_photos(".")
         self.status.update(f"Found {len(files)} files")
 
+        # Focus on the tree when the app starts
+        self.set_focus(self.photo_tree)
+
 
     def photo_list(self):
-        tree: Tree[str] = Tree("Files")
+        tree: Tree[str] = Tree("Files", classes="photo_tree")
         
         tree.show_root = False
 
