@@ -1,120 +1,138 @@
 from features.raw_processing import load_raw_image
-from features.perspective import detect_document, warp
-import cv2 as cv
+# from features.perspective import detect_document, warp
+
 import os
-from pathlib import Path
-import shutil
+import sys
 
-from textual.app import App
-from textual.widgets import Footer,Static
-from textual.widgets import Tree
+import cv2 as cv
 
-from textual.containers import Container, Horizontal, VerticalScroll
+from PySide6.QtWidgets import QApplication, QListWidgetItem, QLabel, QListWidget
+from PySide6.QtCore import QFile, Qt
+from PySide6.QtUiTools import QUiLoader
+from PySide6.QtGui import QImage, QPixmap
 
-# ---------- LOAD ----------
-#img = load_raw_image("IMG_9095.CR3")
+from PySide6.QtCore import QTimer
 
-# ---------- DETECT ----------
-#pts = detect_document(img)
-
-# ---------- WARP ----------
-#warped = warp(img, pts)
-
-# ---------- SHOW ----------
-#cv.imwrite("preview.png", warped)
-
-#os.system("kitty +kitten icat --clear")
-#os.system("kitty +kitten icat preview.png")
-
-
-
-# Get the list of all files and directories
+# ---------- GET PHOTOS ----------
 def get_photos(path):
-        raw_files = []
-
-        for x in os.listdir(path):
-            if x.lower().endswith(".cr3"):
-                raw_files.append(x) 
-
-        return raw_files
+    return [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
 
 
+# ---------- NUMPY → QPIXMAP ----------
+def numpy_to_qpixmap(img):
+    # convert BGR to RGB
+    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+
+    height, width, channel = img.shape
+    bytes_per_line = 3 * width
+
+    q_image = QImage(
+        img.data,
+        width,
+        height,
+        bytes_per_line,
+        QImage.Format_RGB888
+    )
+
+    return QPixmap.fromImage(q_image)
 
 
-
-class phote(App):
-    CSS_PATH = "styles.tcss"
-
-    BINDINGS = [
-        #(key, action name, description),
-
-        ("q", "quit" , "Exit the application")
-            ]
-
-    def compose(self):
-        self.status = Static("Ready")
-        self.photo_tree = self.photo_list()
-        
-        with Container(id="app-grid"):
-             with VerticalScroll(id="left-pane"):
-                yield self.photo_tree
-             with Horizontal(id="right-pane"):
-                yield Static("Preview",id="preview")
-        # Widgets
-        yield self.status
-        yield Footer()
+# ---------- GLOBAL (for resize) ----------
+current_pixmap = None
 
 
-    def on_mount(self):
-        files = get_photos(".")
-        self.status.update(f"Found {len(files)} files")
+# ---------- APP ----------
+app = QApplication(sys.argv)
+loader = QUiLoader()
 
-        # Focus on the tree when the app starts
-        self.set_focus(self.photo_tree)
+file = QFile('phote.ui')
+file.open(QFile.ReadOnly)
 
-
-    def photo_list(self):
-        tree: Tree[str] = Tree("Files", classes="photo_tree")
-        
-        tree.show_root = False
-
-        base_path = os.path.abspath(".")
-
-        for file in get_photos(base_path):
-            full_path = os.path.join(base_path, file)
-
-            tree.root.add_leaf(file, data=full_path)
-
-        return tree
-
-    def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
-        path = event.node.data
-
-        if not path:
-            return
-
-        # Create tmp folder if not exists
-        folder_path = Path("./temp")
-        # exist_ok=True: does nothing if the folder already exists
-        folder_path.mkdir(exist_ok=True)
-
-        img = load_raw_image(path)
-        cv.imwrite('./temp/preview.jpg', img)
+window = loader.load(file)
+file.close()
 
 
-  
-    # This is an action method. (name starts with action)
-    # When i press q i then shutdown and exit the program
-    def action_quit(self):
-        # Delete the temp folder
-        temp_dir = "./temp"
+# ---------- FIND WIDGETS ----------
+list_widget = window.findChild(QListWidget, "listWidget")
+image_label = window.findChild(QLabel, "label_2")  # make sure name matches Qt Designer
 
-        if os.path.isdir(temp_dir):  
-            shutil.rmtree(temp_dir)
+# Safety check
+assert image_label is not None, "image_label not found!"
+assert list_widget is not None, "list_widget not found!"
 
-        self.exit()
+# Nice centering
+image_label.setAlignment(Qt.AlignCenter)
+#image_label.setScaledContents(False)
 
 
+# ---------- INSERT FILES ----------
+base_path = os.path.abspath(".")
 
-if __name__ == "__main__":
-    phote().run()
+for file in get_photos(base_path):
+    full_path = os.path.join(base_path, file)
+
+    item = QListWidgetItem(file)
+    item.setData(256, full_path)
+    list_widget.addItem(item)
+
+
+# ---------- SCALE + DISPLAY ----------
+def update_image():
+    if not current_pixmap:
+        return
+
+    scaled = current_pixmap.scaled(
+        image_label.size(),
+        Qt.KeepAspectRatio,
+        Qt.SmoothTransformation
+    )
+
+    image_label.setPixmap(scaled)
+    image_label.setAlignment(Qt.AlignCenter)
+    
+# ---------- ON SELECT ----------
+def on_item_changed(current, previous):
+    global current_pixmap
+
+    if not current:
+        return
+
+    path = current.data(256)
+
+    # ---------- LOAD RAW ----------
+    img = load_raw_image(path)
+
+    # OPTIONAL:
+    # pts = detect_document(img)
+    # img = warp(img, pts)
+
+    # ---------- CONVERT ----------
+    pixmap = numpy_to_qpixmap(img)
+
+    current_pixmap = pixmap
+
+    update_image()
+
+
+# ---------- CONNECT ----------
+list_widget.currentItemChanged.connect(on_item_changed)
+
+
+# ---------- AUTO SELECT FIRST ----------
+def select_first_item():
+    if list_widget.count() > 0:
+        list_widget.setCurrentRow(0)
+
+QTimer.singleShot(0, select_first_item)
+
+# ---------- HANDLE RESIZE ----------
+def resizeEvent(event):
+    update_image()
+    return super(type(window), window).resizeEvent(event)
+
+window.resizeEvent = resizeEvent
+
+
+# ---------- RUN ----------
+window.show()
+app.exec()
