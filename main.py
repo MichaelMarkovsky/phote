@@ -1,26 +1,23 @@
 from features.raw_processing import load_raw_image
-# from features.perspective import detect_document, warp
+from features.perspective import detect_document, warp
 
 import os
 import sys
-
 import cv2 as cv
 
 from PySide6.QtWidgets import QApplication, QListWidgetItem, QLabel, QListWidget
-from PySide6.QtCore import QFile, Qt
+from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QImage, QPixmap, QShortcut, QKeySequence
 
-from PySide6.QtCore import QTimer
 
 # ---------- GET PHOTOS ----------
 def get_photos(path):
     return [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
 
 
-# ---------- NUMPY → QPIXMAP ----------
+# ---------- NUMPY to QPIXMAP ----------
 def numpy_to_qpixmap(img):
-    # convert BGR to RGB
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
 
     height, width, channel = img.shape
@@ -37,8 +34,9 @@ def numpy_to_qpixmap(img):
     return QPixmap.fromImage(q_image)
 
 
-# ---------- GLOBAL (for resize) ----------
+# ---------- GLOBAL ----------
 current_pixmap = None
+show_processed = False
 
 
 # ---------- APP ----------
@@ -54,15 +52,13 @@ file.close()
 
 # ---------- FIND WIDGETS ----------
 list_widget = window.findChild(QListWidget, "listWidget")
-image_label = window.findChild(QLabel, "label_2")  # make sure name matches Qt Designer
+image_label = window.findChild(QLabel, "label_2")
 
-# Safety check
 assert image_label is not None, "image_label not found!"
 assert list_widget is not None, "list_widget not found!"
 
-# Nice centering
 image_label.setAlignment(Qt.AlignCenter)
-#image_label.setScaledContents(False)
+image_label.setScaledContents(False)
 
 
 # ---------- INSERT FILES ----------
@@ -88,8 +84,8 @@ def update_image():
     )
 
     image_label.setPixmap(scaled)
-    image_label.setAlignment(Qt.AlignCenter)
-    
+
+
 # ---------- ON SELECT ----------
 def on_item_changed(current, previous):
     global current_pixmap
@@ -99,19 +95,35 @@ def on_item_changed(current, previous):
 
     path = current.data(256)
 
-    # ---------- LOAD RAW ----------
     img = load_raw_image(path)
 
-    # OPTIONAL:
-    # pts = detect_document(img)
-    # img = warp(img, pts)
+    if show_processed:
+        print("Showing PROCESSED")
+        
+        # Auto Perspective Transformation
+        pts = detect_document(img)
+        img = warp(img, pts)
+    else:
+        print("Showing ORIGINAL")
 
-    # ---------- CONVERT ----------
-    pixmap = numpy_to_qpixmap(img)
-
-    current_pixmap = pixmap
-
+    current_pixmap = numpy_to_qpixmap(img)
     update_image()
+
+
+# ---------- ENTER KEY ----------
+def on_enter_pressed():
+    global show_processed
+
+    show_processed = not show_processed
+    print("ENTER pressed -> processed =", show_processed)
+
+    current = list_widget.currentItem()
+    if current:
+        on_item_changed(current, None)
+
+
+shortcut = QShortcut(QKeySequence("Return"), window)
+shortcut.activated.connect(on_enter_pressed)
 
 
 # ---------- CONNECT ----------
@@ -124,6 +136,7 @@ def select_first_item():
         list_widget.setCurrentRow(0)
 
 QTimer.singleShot(0, select_first_item)
+
 
 # ---------- HANDLE RESIZE ----------
 def resizeEvent(event):
