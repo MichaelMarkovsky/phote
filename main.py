@@ -8,8 +8,7 @@ import sys
 import cv2 as cv
 
 from PySide6.QtWidgets import (
-    QApplication, QListWidgetItem, QLabel, QListWidget,
-    QSlider 
+    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
@@ -48,8 +47,8 @@ perspective_enabled = False
 color_enabled = False
 
 color_settings = {
-    "color_fix": 0.8,
-    "warmth": -8,
+    "color_fix": 0.5,
+    "warmth": 0,
     "tint": 0,
     "contrast": 0.5,
     "exposure": 0
@@ -69,26 +68,23 @@ file.close()
 
 # ---------- FIND WIDGETS ----------
 list_widget = window.findChild(QListWidget, "listWidget")
-image_label = window.findChild(QLabel, "label_2")
+image_label = window.findChild(QLabel, "preview")
 
 exposure_slider = window.findChild(QSlider, "exposureSlider")
 warmth_slider = window.findChild(QSlider, "warmthSlider")
 contrast_slider = window.findChild(QSlider, "contrastSlider")
-
-assert image_label is not None
-assert list_widget is not None
+colorfix_slider = window.findChild(QSlider, "colorFixSlider")
 
 image_label.setAlignment(Qt.AlignCenter)
 image_label.setScaledContents(False)
 
-# ---------- INITIAL UI STATE ----------
+
+# ---------- INITIAL UI ----------
 exposure_slider.setValue(0)
 warmth_slider.setValue(0)
 contrast_slider.setValue(50)
+colorfix_slider.setValue(50)
 
-color_settings["exposure"] = 0
-color_settings["warmth"] = 0
-color_settings["contrast"] = 0.5
 
 # ---------- INSERT FILES ----------
 base_path = os.path.abspath(".")
@@ -124,6 +120,12 @@ def process_and_display():
 
     img = current_base_image.copy()
 
+    # Downscale for performance
+    h, w = img.shape[:2]
+    scale = 1000 / max(h, w)
+    if scale < 1:
+        img = cv.resize(img, (int(w * scale), int(h * scale)))
+
     # Perspective
     if perspective_enabled:
         try:
@@ -154,6 +156,7 @@ def process_and_display():
 # ---------- LOAD IMAGE ----------
 def on_item_changed(current, previous):
     global current_base_image
+    global rotation_steps, perspective_enabled
 
     if not current:
         return
@@ -162,7 +165,10 @@ def on_item_changed(current, previous):
 
     print("Loading:", path)
 
-    # LOAD ONLY ONCE
+    # reset state per image
+    rotation_steps = 0
+    perspective_enabled = False
+
     current_base_image = load_raw_image(path)
 
     process_and_display()
@@ -179,7 +185,7 @@ def on_enter_pressed():
 def on_r_pressed():
     global rotation_steps
     rotation_steps += 1
-    print("Rotation =", (rotation_steps % 4) * 90, "degrees")
+    print("Rotation =", (rotation_steps % 4) * 90)
     process_and_display()
 
 
@@ -192,21 +198,34 @@ def on_c_pressed():
 
 # ---------- SLIDERS ----------
 def on_exposure_changed(value):
+    if not color_enabled:
+        return
     color_settings["exposure"] = value / 10.0
     update_timer.start(30)
 
 
 def on_warmth_changed(value):
+    if not color_enabled:
+        return
     color_settings["warmth"] = value
     update_timer.start(30)
 
 
 def on_contrast_changed(value):
+    if not color_enabled:
+        return
     color_settings["contrast"] = value / 100.0
     update_timer.start(30)
 
 
-# ---------- DEBOUNCE TIMER ----------
+def on_colorfix_changed(value):
+    if not color_enabled:
+        return
+    color_settings["color_fix"] = value / 100.0
+    update_timer.start(30)
+
+
+# ---------- TIMER ----------
 update_timer = QTimer()
 update_timer.setSingleShot(True)
 update_timer.timeout.connect(process_and_display)
@@ -218,6 +237,8 @@ list_widget.currentItemChanged.connect(on_item_changed)
 exposure_slider.valueChanged.connect(on_exposure_changed)
 warmth_slider.valueChanged.connect(on_warmth_changed)
 contrast_slider.valueChanged.connect(on_contrast_changed)
+colorfix_slider.valueChanged.connect(on_colorfix_changed)
+
 
 # ---------- SHORTCUT SETUP ----------
 shortcut = QShortcut(QKeySequence("Return"), window)
