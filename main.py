@@ -9,7 +9,7 @@ import cv2 as cv
 
 from PySide6.QtWidgets import (
     QApplication, QListWidgetItem, QLabel, QListWidget,
-    QSlider, QCheckBox
+    QSlider 
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
@@ -51,7 +51,7 @@ color_settings = {
     "color_fix": 0.8,
     "warmth": -8,
     "tint": 0,
-    "contrast": False,
+    "contrast": 0.5,
     "exposure": 0
 }
 
@@ -73,7 +73,7 @@ image_label = window.findChild(QLabel, "label_2")
 
 exposure_slider = window.findChild(QSlider, "exposureSlider")
 warmth_slider = window.findChild(QSlider, "warmthSlider")
-contrast_checkbox = window.findChild(QCheckBox, "contrastCheckbox")
+contrast_slider = window.findChild(QSlider, "contrastSlider")
 
 assert image_label is not None
 assert list_widget is not None
@@ -81,6 +81,14 @@ assert list_widget is not None
 image_label.setAlignment(Qt.AlignCenter)
 image_label.setScaledContents(False)
 
+# ---------- INITIAL UI STATE ----------
+exposure_slider.setValue(0)
+warmth_slider.setValue(0)
+contrast_slider.setValue(50)
+
+color_settings["exposure"] = 0
+color_settings["warmth"] = 0
+color_settings["contrast"] = 0.5
 
 # ---------- INSERT FILES ----------
 base_path = os.path.abspath(".")
@@ -193,9 +201,9 @@ def on_warmth_changed(value):
     update_timer.start(30)
 
 
-def on_contrast_changed(state):
-    color_settings["contrast"] = bool(state)
-    process_and_display()
+def on_contrast_changed(value):
+    color_settings["contrast"] = value / 100.0
+    update_timer.start(30)
 
 
 # ---------- DEBOUNCE TIMER ----------
@@ -209,8 +217,7 @@ list_widget.currentItemChanged.connect(on_item_changed)
 
 exposure_slider.valueChanged.connect(on_exposure_changed)
 warmth_slider.valueChanged.connect(on_warmth_changed)
-contrast_checkbox.stateChanged.connect(on_contrast_changed)
-
+contrast_slider.valueChanged.connect(on_contrast_changed)
 
 # ---------- SHORTCUT SETUP ----------
 shortcut = QShortcut(QKeySequence("Return"), window)

@@ -43,16 +43,19 @@ def adjust_tint(img, tint=0):
     return np.clip(cv2.merge([b, g, r]), 0, 255).astype(np.uint8)
 
 
-def enhance_contrast(img):
+def enhance_contrast(img, strength=1.0):
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
 
+    # CLAHE
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    l = clahe.apply(l)
+    l_clahe = clahe.apply(l)
 
-    lab = cv2.merge((l, a, b))
+    # blend original + enhanced
+    l = l * (1 - strength) + l_clahe * strength
+
+    lab = cv2.merge((l.astype("uint8"), a, b))
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-
 
 def adjust_exposure(img, exposure=0):
     img = img.astype(np.float32)
@@ -74,9 +77,10 @@ def apply_color_pipeline(
     img = adjust_temperature(img, temp=warmth)
     img = adjust_tint(img, tint=tint)
 
-    if contrast:
-        img = enhance_contrast(img)
+    if contrast > 0:
+        img = enhance_contrast(img, strength=contrast)
 
     img = adjust_exposure(img, exposure=exposure)
 
     return img
+
