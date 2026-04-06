@@ -1,5 +1,6 @@
 from features.raw_processing import load_raw_image
 from features.perspective import detect_document, warp
+from features.rotate import rotate
 
 import os
 import sys
@@ -36,8 +37,8 @@ def numpy_to_qpixmap(img):
 
 # ---------- GLOBAL ----------
 current_pixmap = None
-show_processed = False
-
+rotation_steps = 0
+perspective_enabled = False
 
 # ---------- APP ----------
 app = QApplication(sys.argv)
@@ -97,14 +98,17 @@ def on_item_changed(current, previous):
 
     img = load_raw_image(path)
 
-    if show_processed:
-        print("Showing PROCESSED")
-        
-        # Auto Perspective Transformation
-        pts = detect_document(img)
-        img = warp(img, pts)
-    else:
-        print("Showing ORIGINAL")
+    # Perspective
+    if perspective_enabled:
+        try:
+            pts = detect_document(img)
+            img = warp(img, pts)
+        except Exception as e:
+            print("Perspective failed:", e)
+
+    # Rotation (apply multiple times)
+    for _ in range(rotation_steps % 4):
+        img = rotate(img)
 
     current_pixmap = numpy_to_qpixmap(img)
     update_image()
@@ -112,19 +116,31 @@ def on_item_changed(current, previous):
 
 # ---------- ENTER KEY ----------
 def on_enter_pressed():
-    global show_processed
+    global perspective_enabled
 
-    show_processed = not show_processed
-    print("ENTER pressed -> processed =", show_processed)
+    perspective_enabled = not perspective_enabled
+    print("Perspective =", perspective_enabled)
 
     current = list_widget.currentItem()
     if current:
         on_item_changed(current, None)
 
-
 shortcut = QShortcut(QKeySequence("Return"), window)
 shortcut.activated.connect(on_enter_pressed)
 
+# ________ R KEY _________
+def on_r_pressed():
+    global rotation_steps
+
+    rotation_steps += 1
+    print("Rotation steps =", rotation_steps % 4)
+
+    current = list_widget.currentItem()
+    if current:
+        on_item_changed(current, None)
+
+shortcut_r = QShortcut(QKeySequence("R"), window)
+shortcut_r.activated.connect(on_r_pressed)
 
 # ---------- CONNECT ----------
 list_widget.currentItemChanged.connect(on_item_changed)
