@@ -6,6 +6,7 @@ from features.color import apply_color_pipeline
 import os
 import sys
 import cv2 as cv
+import json
 
 from PySide6.QtWidgets import (
     QApplication, QListWidgetItem, QLabel, QListWidget, QSlider
@@ -13,6 +14,43 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QImage, QPixmap, QShortcut, QKeySequence
+
+
+# ---------- SETTINGS FILE ----------
+def get_settings_path(image_path):
+    return image_path + ".json"
+
+
+def save_settings(image_path):
+    data = {
+        "rotation": rotation_steps,
+        "perspective": perspective_enabled,
+        "color_enabled": color_enabled,
+        "color_settings": color_settings
+    }
+
+    with open(get_settings_path(image_path), "w") as f:
+        json.dump(data, f, indent=4)
+
+
+def load_settings(image_path):
+    global rotation_steps, perspective_enabled, color_enabled
+
+    path = get_settings_path(image_path)
+
+    if not os.path.exists(path):
+        return
+
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    rotation_steps = data.get("rotation", 0)
+    perspective_enabled = data.get("perspective", False)
+    color_enabled = data.get("color_enabled", False)
+
+    # safe update instead of replace
+    loaded = data.get("color_settings", {})
+    color_settings.update(loaded)
 
 
 # ---------- GET PHOTOS ----------
@@ -111,7 +149,7 @@ def update_image():
     image_label.setPixmap(scaled)
 
 
-# ---------- PROCESS PIPELINE ----------
+# ---------- PROCESS ----------
 def process_and_display():
     global current_pixmap
 
@@ -120,7 +158,7 @@ def process_and_display():
 
     img = current_base_image.copy()
 
-    # Downscale for performance
+    # Downscale preview
     h, w = img.shape[:2]
     scale = 1000 / max(h, w)
     if scale < 1:
@@ -153,10 +191,18 @@ def process_and_display():
     update_image()
 
 
+# ---------- PROCESS + SAVE ----------
+def process_and_display_and_save():
+    process_and_display()
+
+    current = list_widget.currentItem()
+    if current:
+        save_settings(current.data(256))
+
+
 # ---------- LOAD IMAGE ----------
 def on_item_changed(current, previous):
     global current_base_image
-    global rotation_steps, perspective_enabled
 
     if not current:
         return
@@ -165,11 +211,16 @@ def on_item_changed(current, previous):
 
     print("Loading:", path)
 
-    # reset state per image
-    rotation_steps = 0
-    perspective_enabled = False
-
     current_base_image = load_raw_image(path)
+
+    # load saved settings
+    load_settings(path)
+
+    # sync UI
+    exposure_slider.setValue(int(color_settings["exposure"] * 10))
+    warmth_slider.setValue(int(color_settings["warmth"]))
+    contrast_slider.setValue(int(color_settings["contrast"] * 100))
+    colorfix_slider.setValue(int(color_settings["color_fix"] * 100))
 
     process_and_display()
 
@@ -179,21 +230,21 @@ def on_enter_pressed():
     global perspective_enabled
     perspective_enabled = not perspective_enabled
     print("Perspective =", perspective_enabled)
-    process_and_display()
+    process_and_display_and_save()
 
 
 def on_r_pressed():
     global rotation_steps
     rotation_steps += 1
     print("Rotation =", (rotation_steps % 4) * 90)
-    process_and_display()
+    process_and_display_and_save()
 
 
 def on_c_pressed():
     global color_enabled
     color_enabled = not color_enabled
     print("Color =", color_enabled)
-    process_and_display()
+    process_and_display_and_save()
 
 
 # ---------- SLIDERS ----------
@@ -228,7 +279,7 @@ def on_colorfix_changed(value):
 # ---------- TIMER ----------
 update_timer = QTimer()
 update_timer.setSingleShot(True)
-update_timer.timeout.connect(process_and_display)
+update_timer.timeout.connect(process_and_display_and_save)
 
 
 # ---------- CONNECT ----------
@@ -240,7 +291,7 @@ contrast_slider.valueChanged.connect(on_contrast_changed)
 colorfix_slider.valueChanged.connect(on_colorfix_changed)
 
 
-# ---------- SHORTCUT SETUP ----------
+# ---------- SHORTCUTS ----------
 shortcut = QShortcut(QKeySequence("Return"), window)
 shortcut.setContext(Qt.ApplicationShortcut)
 shortcut.activated.connect(on_enter_pressed)
