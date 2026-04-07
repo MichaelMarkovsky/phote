@@ -170,7 +170,7 @@ def update_status():
         f"Photo {current_pid:03d} → {status}\n"
         f"Front: {'✔' if front_done else '✘'} | "
         f"Back: {'✔' if back_done else '✘'}\n"
-        f"Manual: {'⚠' if needs_manual else '✔'}\n"
+        f"Manual: {'!' if needs_manual else '✔'}\n"
         f"Next: {get_next_photo_id(photos):03d}"
     )
 
@@ -293,7 +293,7 @@ def numpy_to_qpixmap(img):
 # ________ EXPORT ________
 def export_current_image():
     if current_base_image is None:
-        log("⚠ No image loaded")
+        log("! No image loaded")
         return
 
     pid = photo_spin.value()
@@ -306,7 +306,7 @@ def export_current_image():
             pts = detect_document(img)
             img = warp(img, pts)
         except Exception as e:
-            log(f"⚠ Perspective failed: {e}")
+            log(f"! Perspective failed: {e}")
 
     for _ in range(rotation_steps % 4):
         img = rotate(img)
@@ -324,7 +324,7 @@ def export_current_image():
     path = os.path.join(folder, filename)
 
     if os.path.exists(path):
-        log(f"⚠ Already exists: {filename}")
+        log(f"! Already exists: {filename}")
         return
 
     cv.imwrite(path, img)
@@ -333,6 +333,10 @@ def export_current_image():
 
 # ______ EXPORT ALL _______
 def export_all_images():
+    exported = 0
+    skipped_manual = 0
+    skipped_other = 0
+
     log_box.clear()
     log("=== Export Started ===\n")
 
@@ -354,7 +358,8 @@ def export_all_images():
 
         # ---------- CHECK JSON ----------
         if not os.path.exists(json_path):
-            log(f"[{i+1}/{total}] ⚠ Skipped (no JSON)")
+            log(f"[{i+1}/{total}] ! Skipped (no JSON)")
+            skipped_other += 1
             QApplication.processEvents()
             continue
 
@@ -366,8 +371,17 @@ def export_all_images():
         pid = cls.get("photo_id")
         side = cls.get("side", "").lower()
 
+        needs_manual = cls.get("needs_manual", False)
+
+        if needs_manual:
+            log(f"[{i+1}/{total}] ! Skipped (needs manual)")
+            skipped_manual += 1
+            QApplication.processEvents()
+            continue
+
         if pid is None or side not in ("front", "back"):
-            log(f"[{i+1}/{total}] ⚠ Skipped (invalid classification)")
+            log(f"[{i+1}/{total}] ! Skipped (invalid classification)")
+            skipped_other += 1
             QApplication.processEvents()
             continue
 
@@ -382,7 +396,8 @@ def export_all_images():
                 pts = detect_document(img)
                 img = warp(img, pts)
             except Exception as e:
-                log(f"[{i+1}/{total}] ⚠ Perspective failed: {e}")
+                log(f"[{i+1}/{total}] ! Perspective failed: {e}")
+                skipped_other += 1
                 QApplication.processEvents()
 
         rotation_steps_local = data.get("rotation", 0)
@@ -405,16 +420,21 @@ def export_all_images():
 
         # ---------- PREVENT OVERWRITE ----------
         if os.path.exists(output_path):
-            log(f"[{i+1}/{total}] ⚠ Skipped (already exists)")
+            log(f"[{i+1}/{total}] ! Skipped (already exists)")
+            skipped_other += 1
             QApplication.processEvents()
             continue
 
         # ---------- SAVE ----------
         cv.imwrite(output_path, img)
         log(f"[{i+1}/{total}] ✔ Exported → {filename}")
+        exported += 1
         QApplication.processEvents()
 
     log("\nExport finished.")
+    log(f"✔ Exported: {exported}")
+    log(f"! Skipped (manual): {skipped_manual}")
+    log(f"! Skipped (other): {skipped_other}")
     QApplication.processEvents()
 
 
@@ -512,7 +532,7 @@ def populate_raw_list():
             label += f" → [{pid:03d} {side.upper()}]"
 
             if manual:
-                label += " ⚠"
+                label += " !"
         else:
             label += " → [UNASSIGNED]"
 
