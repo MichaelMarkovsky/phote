@@ -9,7 +9,7 @@ import cv2 as cv
 import json
 
 from PySide6.QtWidgets import (
-    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider
+    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
@@ -26,11 +26,27 @@ def save_settings(image_path):
         "rotation": rotation_steps,
         "perspective": perspective_enabled,
         "color_enabled": color_enabled,
-        "color_settings": color_settings
+        "color_settings": color_settings,
+
+        "classification": {
+            "photo_id": photo_spin.value(),
+            "side": side_combo.currentText().lower(),
+            "needs_manual": manual_check.isChecked()
+        }
     }
 
     with open(get_settings_path(image_path), "w") as f:
         json.dump(data, f, indent=4)
+
+    print("Saving JSON to:", get_settings_path(image_path))
+
+# ________ AUTO SAVE WHEN CHANGED _________
+def on_classification_changed():
+    current = list_widget.currentItem()
+    if current:
+        save_settings(current.data(256))
+        update_status()
+        update_photo_list()
 
 
 def load_settings(image_path):
@@ -48,11 +64,186 @@ def load_settings(image_path):
     perspective_enabled = data.get("perspective", False)
     color_enabled = data.get("color_enabled", False)
 
-    # safe update instead of replace
-    loaded = data.get("color_settings", {})
-    color_settings.update(loaded)
+    color_settings.update(data.get("color_settings", {}))
+
+    
+# __________ STATUS MAP ____________
+def build_photo_map(folder_path):
+    photos = {}
+
+    for file in os.listdir(folder_path):
+        if not file.lower().endswith(".cr3"):
+            continue
+
+        full_path = os.path.join(folder_path, file)
+        json_path = full_path + ".json"
+
+        if not os.path.exists(json_path):
+            continue
+
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        cls = data.get("classification", {})
+
+        pid = cls.get("photo_id")
+        side = cls.get("side", "").lower()
+        needs_manual = cls.get("needs_manual", False)
+
+        # ---------- SAFETY CHECK ----------
+        if pid is None or side not in ("front", "back"):
+            continue
+
+        pid = int(pid)
+
+        # ---------- INIT ----------
+        if pid not in photos:
+            photos[pid] = {
+                "front": None,
+                "back": None,
+                "needs_manual": False
+            }
+
+        # ---------- ASSIGN SIDE ----------
+        photos[pid][side] = full_path
+
+        # ---------- MERGE MANUAL FLAG ----------
+        # if ANY image in this photo needs manual → whole photo needs manual
+        photos[pid]["needs_manual"] = (
+            photos[pid]["needs_manual"] or needs_manual
+        )
+
+        print("Loaded JSON:", pid, side, "| manual:", needs_manual)
+
+    return photos
+
+def get_next_photo_id(photos):
+    if not photos:
+        return 1
+
+    return max(photos.keys()) + 1
 
 
+def get_photo_status(photo):
+    if photo["front"] and photo["back"]:
+        return "complete"
+    elif photo["front"] or photo["back"]:
+        return "partial"
+    else:
+        return "empty"
+
+
+def update_status():
+    if current_image_path is None:
+        status_label.setText("No image selected")
+        return
+
+    current_dir = os.path.dirname(current_image_path)
+    photos = build_photo_map(current_dir)
+
+    current_pid = photo_spin.value()
+
+    # include needs_manual in default
+    photo = photos.get(current_pid, {
+        "front": None,
+        "back": None,
+        "needs_manual": False
+    })
+
+    front_done = photo["front"] is not None
+    back_done = photo["back"] is not None
+    needs_manual = photo.get("needs_manual", False)
+
+    # ---------- PRIORITY LOGIC ----------
+    if needs_manual:
+        status = "NEEDS MANUAL"
+    elif front_done and back_done:
+        status = "COMPLETE"
+    elif front_done or back_done:
+        status = "PARTIAL"
+    else:
+        status = "EMPTY"
+
+    # ---------- UI ----------
+    status_label.setText(
+        f"Photo {current_pid:03d} → {status}\n"
+        f"Front: {'✔' if front_done else '✘'} | "
+        f"Back: {'✔' if back_done else '✘'}\n"
+        f"Manual: {'⚠' if needs_manual else '✔'}\n"
+        f"Next: {get_next_photo_id(photos):03d}"
+    )
+
+    # ---------- DEBUG ----------
+    print("current_image_path:", current_image_path)
+    print("current_dir:", current_dir)
+    print("photos map:", photos)
+    print("current_pid:", current_pid)
+
+
+def set_ui_without_signals():
+    side_combo.blockSignals(True)
+    photo_spin.blockSignals(True)
+    manual_check.blockSignals(True)
+
+def restore_ui_signals():
+    side_combo.blockSignals(False)
+    photo_spin.blockSignals(False)
+    manual_check.blockSignals(False)
+
+
+def update_photo_list():
+    if current_image_path is None:
+        return
+
+    current_dir = os.path.dirname(current_image_path)
+    photos = build_photo_map(current_dir)
+
+    photo_list.clear()
+
+    max_id = get_next_photo_id(photos)
+
+    for pid in range(1, max_id + 1):
+        photo = photos.get(pid, {
+            "front": None,
+            "back": None,
+            "needs_manual": False
+        })
+
+        front = photo["front"] is not None
+        back = photo["back"] is not None
+        needs_manual = photo.get("needs_manual", False)
+
+        # ---------- SAME PRIORITY LOGIC ----------
+        if needs_manual:
+            status = "NEEDS MANUAL"
+        elif front and back:
+            status = "COMPLETE"
+        elif front or back:
+            status = "PARTIAL"
+        else:
+            status = "EMPTY"
+
+        # ---------- TEXT ----------
+        text = (
+            f"{pid:03d} | "
+            f"F:{'✔' if front else '✘'} "
+            f"B:{'✔' if back else '✘'} | "
+            f"{status}"
+        )
+
+        item = QListWidgetItem(text)
+
+        # ---------- COLORS ----------
+        if needs_manual:
+            item.setForeground(Qt.red)
+        elif front and back:
+            item.setForeground(Qt.green)
+        elif front or back:
+            item.setForeground(Qt.yellow)
+        else:
+            item.setForeground(Qt.gray)
+
+        photo_list.addItem(item)
 # ---------- GET PHOTOS ----------
 def get_photos(path):
     return [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
@@ -92,6 +283,7 @@ color_settings = {
     "exposure": 0
 }
 
+current_image_path = None
 
 # ---------- APP ----------
 app = QApplication(sys.argv)
@@ -116,6 +308,12 @@ colorfix_slider = window.findChild(QSlider, "colorFixSlider")
 image_label.setAlignment(Qt.AlignCenter)
 image_label.setScaledContents(False)
 
+side_combo = window.findChild(QComboBox, "sideCombo")
+photo_spin = window.findChild(QSpinBox, "photoSpin")
+manual_check = window.findChild(QCheckBox, "manualCheck")
+
+status_label = window.findChild(QLabel, "statusLabel")
+photo_list = window.findChild(QListWidget, "photoList")
 
 # ---------- INITIAL UI ----------
 exposure_slider.setValue(0)
@@ -202,27 +400,75 @@ def process_and_display_and_save():
 
 # ---------- LOAD IMAGE ----------
 def on_item_changed(current, previous):
-    global current_base_image
+    global current_base_image, current_image_path
 
     if not current:
         return
 
     path = current.data(256)
+    current_image_path = path
 
     print("Loading:", path)
 
     current_base_image = load_raw_image(path)
 
-    # load saved settings
+    # load saved settings (this updates color_settings + classification internally)
     load_settings(path)
 
-    # sync UI
+    # ---------- BLOCK SIGNALS ----------
+    side_combo.blockSignals(True)
+    photo_spin.blockSignals(True)
+    manual_check.blockSignals(True)
+
+    exposure_slider.blockSignals(True)
+    warmth_slider.blockSignals(True)
+    contrast_slider.blockSignals(True)
+    colorfix_slider.blockSignals(True)
+
+    # ---------- SYNC UI (COLOR) ----------
     exposure_slider.setValue(int(color_settings["exposure"] * 10))
     warmth_slider.setValue(int(color_settings["warmth"]))
     contrast_slider.setValue(int(color_settings["contrast"] * 100))
     colorfix_slider.setValue(int(color_settings["color_fix"] * 100))
 
+    # ---------- SYNC UI (CLASSIFICATION) ----------
+    json_path = path + ".json"
+
+    if os.path.exists(json_path):
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        cls = data.get("classification", {})
+
+        photo_spin.setValue(int(cls.get("photo_id", 1)))
+
+        # IMPORTANT: UI uses "Front"/"Back", JSON uses lowercase
+        side = cls.get("side", "front").capitalize()
+        side_combo.setCurrentText(side)
+
+        manual_check.setChecked(cls.get("needs_manual", False))
+    else:
+        # default state
+        photo_spin.setValue(1)
+        side_combo.setCurrentText("Front")
+        manual_check.setChecked(False)
+
+    # ---------- RESTORE SIGNALS ----------
+    side_combo.blockSignals(False)
+    photo_spin.blockSignals(False)
+    manual_check.blockSignals(False)
+
+    exposure_slider.blockSignals(False)
+    warmth_slider.blockSignals(False)
+    contrast_slider.blockSignals(False)
+    colorfix_slider.blockSignals(False)
+
+    # ---------- DISPLAY ----------
     process_and_display()
+
+    # ---------- STATUS ----------
+    update_status()   
+    update_photo_list()
 
 
 # ---------- SHORTCUTS ----------
@@ -290,6 +536,9 @@ warmth_slider.valueChanged.connect(on_warmth_changed)
 contrast_slider.valueChanged.connect(on_contrast_changed)
 colorfix_slider.valueChanged.connect(on_colorfix_changed)
 
+side_combo.currentTextChanged.connect(on_classification_changed)
+photo_spin.valueChanged.connect(on_classification_changed)
+manual_check.stateChanged.connect(on_classification_changed)
 
 # ---------- SHORTCUTS ----------
 shortcut = QShortcut(QKeySequence("Return"), window)
