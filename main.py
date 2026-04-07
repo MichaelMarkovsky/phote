@@ -268,8 +268,8 @@ def update_photo_list():
         photo_list.addItem(item)
 # ---------- GET PHOTOS ----------
 def get_photos(path):
-    return [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
-
+    files = [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
+    return sorted(files)
 
 # ---------- NUMPY to QPIXMAP ----------
 def numpy_to_qpixmap(img):
@@ -348,23 +348,29 @@ colorfix_slider.setValue(50)
 def populate_raw_list():
     list_widget.clear()
 
-    for file in get_photos(base_path):
+    files = get_photos(base_path)
+    total = len(files)
+
+    for index, file in enumerate(files):
         full_path = os.path.join(base_path, file)
 
         cls = get_image_classification(full_path)
 
+        # ---------- BASE LABEL ----------
+        label = f"[{index+1}/{total}] {file}"
+
+        # ---------- CLASSIFICATION ----------
         if cls:
             pid = cls["photo_id"]
             side = cls["side"]
             manual = cls.get("needs_manual", False)
 
-            label = f"{file}  →  [{pid:03d} {side.upper()}]"
+            label += f" → [{pid:03d} {side.upper()}]"
 
             if manual:
                 label += " ⚠"
-
         else:
-            label = f"{file}  →  [UNASSIGNED]"
+            label += " → [UNASSIGNED]"
 
         item = QListWidgetItem(label)
         item.setData(256, full_path)
@@ -378,7 +384,6 @@ def populate_raw_list():
             item.setForeground(Qt.green)
 
         list_widget.addItem(item)
-
 
 base_path = os.path.abspath(".")
 populate_raw_list()
