@@ -9,11 +9,12 @@ import cv2 as cv
 import json
 
 from PySide6.QtWidgets import (
-    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox,QPlainTextEdit,QTabWidget
+    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox,QPlainTextEdit,QTabWidget,QFileDialog
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QImage, QPixmap, QShortcut, QKeySequence
+
 
 
 # ---------- SETTINGS FILE ----------
@@ -715,15 +716,39 @@ def on_c_pressed():
 def on_e_pressed():
     export_current_image()
 
-shortcut_e = QShortcut(QKeySequence("e"), window)
-shortcut_e.activated.connect(on_e_pressed)
+
 
 
 def on_shift_e_pressed():
     export_all_images()
 
-shortcut_export_all = QShortcut(QKeySequence("Shift+E"), window)
-shortcut_export_all.activated.connect(on_shift_e_pressed)
+
+
+def open_folder():
+    global base_path
+
+    folder = QFileDialog.getExistingDirectory(
+        window,
+        "Select Folder",
+        base_path  # start location
+    )
+
+    if not folder:
+        return
+
+    base_path = folder
+    log(f"Opened folder: {base_path}")
+
+    # reload everything
+    populate_raw_list()
+    update_photo_list()
+
+    # auto select first image
+    if list_widget.count() > 0:
+        list_widget.setCurrentRow(0)
+
+
+
 
 # ---------- SLIDERS ----------
 def on_exposure_changed(value):
@@ -777,6 +802,7 @@ shortcut = QShortcut(QKeySequence("Return"), window)
 shortcut.setContext(Qt.ApplicationShortcut)
 shortcut.activated.connect(on_enter_pressed)
 
+
 shortcut_r = QShortcut(QKeySequence("R"), window)
 shortcut_r.setContext(Qt.ApplicationShortcut)
 shortcut_r.activated.connect(on_r_pressed)
@@ -785,6 +811,14 @@ shortcut_c = QShortcut(QKeySequence("C"), window)
 shortcut_c.setContext(Qt.ApplicationShortcut)
 shortcut_c.activated.connect(on_c_pressed)
 
+shortcut_e = QShortcut(QKeySequence("E"), window)
+shortcut_e.activated.connect(on_e_pressed)
+
+shortcut_export_all = QShortcut(QKeySequence("Shift+E"), window)
+shortcut_export_all.activated.connect(on_shift_e_pressed)
+
+shortcut_open = QShortcut(QKeySequence("Ctrl+O"), window)
+shortcut_open.activated.connect(open_folder)
 
 # ---------- AUTO SELECT ----------
 def select_first_item():
