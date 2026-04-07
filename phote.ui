@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1365</width>
-    <height>648</height>
+    <height>646</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -168,6 +168,13 @@
     </property>
     <layout class="QVBoxLayout" name="verticalLayout_3">
      <item>
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Images Found:</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QListWidget" name="listWidget"/>
      </item>
      <item>
@@ -209,7 +216,44 @@
       </widget>
      </item>
      <item>
-      <widget class="QListWidget" name="photoList"/>
+      <widget class="QTabWidget" name="tabWidget">
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="tab">
+        <attribute name="title">
+         <string>Gloal Edits</string>
+        </attribute>
+        <widget class="QListWidget" name="photoList">
+         <property name="geometry">
+          <rect>
+           <x>8</x>
+           <y>1</y>
+           <width>231</width>
+           <height>181</height>
+          </rect>
+         </property>
+        </widget>
+       </widget>
+       <widget class="QWidget" name="tab_2">
+        <attribute name="title">
+         <string>Export Logs</string>
+        </attribute>
+        <widget class="QPlainTextEdit" name="logBox">
+         <property name="geometry">
+          <rect>
+           <x>3</x>
+           <y>9</y>
+           <width>241</width>
+           <height>161</height>
+          </rect>
+         </property>
+         <property name="readOnly">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </widget>
+      </widget>
      </item>
     </layout>
    </widget>

@@ -9,7 +9,7 @@ import cv2 as cv
 import json
 
 from PySide6.QtWidgets import (
-    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox
+    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox,QPlainTextEdit,QTabWidget
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
@@ -289,7 +289,148 @@ def numpy_to_qpixmap(img):
     return QPixmap.fromImage(q_image)
 
 
+
+# ________ EXPORT ________
+def export_current_image():
+    if current_base_image is None:
+        log("⚠ No image loaded")
+        return
+
+    pid = photo_spin.value()
+    side = side_combo.currentText().lower()
+
+    img = current_base_image.copy()
+
+    if perspective_enabled:
+        try:
+            pts = detect_document(img)
+            img = warp(img, pts)
+        except Exception as e:
+            log(f"⚠ Perspective failed: {e}")
+
+    for _ in range(rotation_steps % 4):
+        img = rotate(img)
+
+    if color_enabled:
+        img = apply_color_pipeline(img, **color_settings)
+
+    current_dir = os.path.dirname(current_image_path)
+    output_dir = os.path.join(current_dir, "Edited", "Black and White")
+
+    folder = os.path.join(output_dir, f"{pid:03d}")
+    os.makedirs(folder, exist_ok=True)
+
+    filename = f"{pid:03d} - {side}.png"
+    path = os.path.join(folder, filename)
+
+    if os.path.exists(path):
+        log(f"⚠ Already exists: {filename}")
+        return
+
+    cv.imwrite(path, img)
+    log(f"✔ Exported → {filename}")
+
+
+# ______ EXPORT ALL _______
+def export_all_images():
+    log_box.clear()
+    log("=== Export Started ===\n")
+
+    tab_widget.setCurrentIndex(1)
+
+    files = get_photos(base_path)
+    total = len(files)
+
+    log(f"Starting export of {total} images...\n")
+
+    for i, file in enumerate(files):
+        full_path = os.path.join(base_path, file)
+        json_path = full_path + ".json"
+
+        percent = int((i + 1) / total * 100)
+
+        log(f"[{i+1}/{total}] ({percent}%) Processing {file}")
+        QApplication.processEvents()
+
+        # ---------- CHECK JSON ----------
+        if not os.path.exists(json_path):
+            log(f"[{i+1}/{total}] ⚠ Skipped (no JSON)")
+            QApplication.processEvents()
+            continue
+
+        # ---------- LOAD JSON ----------
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        cls = data.get("classification", {})
+        pid = cls.get("photo_id")
+        side = cls.get("side", "").lower()
+
+        if pid is None or side not in ("front", "back"):
+            log(f"[{i+1}/{total}] ⚠ Skipped (invalid classification)")
+            QApplication.processEvents()
+            continue
+
+        pid = int(pid)
+
+        # ---------- LOAD IMAGE ----------
+        img = load_raw_image(full_path)
+
+        # ---------- APPLY SETTINGS ----------
+        if data.get("perspective", False):
+            try:
+                pts = detect_document(img)
+                img = warp(img, pts)
+            except Exception as e:
+                log(f"[{i+1}/{total}] ⚠ Perspective failed: {e}")
+                QApplication.processEvents()
+
+        rotation_steps_local = data.get("rotation", 0)
+        for _ in range(rotation_steps_local % 4):
+            img = rotate(img)
+
+        if data.get("color_enabled", False):
+            color_settings_local = data.get("color_settings", {})
+            img = apply_color_pipeline(img, **color_settings_local)
+
+        # ---------- OUTPUT PATH ----------
+        current_dir = os.path.dirname(full_path)
+        output_dir = os.path.join(current_dir, "Edited", "Black and White")
+
+        folder = os.path.join(output_dir, f"{pid:03d}")
+        os.makedirs(folder, exist_ok=True)
+
+        filename = f"{pid:03d} - {side}.png"
+        output_path = os.path.join(folder, filename)
+
+        # ---------- PREVENT OVERWRITE ----------
+        if os.path.exists(output_path):
+            log(f"[{i+1}/{total}] ⚠ Skipped (already exists)")
+            QApplication.processEvents()
+            continue
+
+        # ---------- SAVE ----------
+        cv.imwrite(output_path, img)
+        log(f"[{i+1}/{total}] ✔ Exported → {filename}")
+        QApplication.processEvents()
+
+    log("\nExport finished.")
+    QApplication.processEvents()
+
+
+# _________ LOGS ____________
+def log(message):
+    print(message)  # keep console (optional)
+
+    log_box.appendPlainText(message)
+
+    # auto-scroll
+    scrollbar = log_box.verticalScrollBar()
+    scrollbar.setValue(scrollbar.maximum())
+
 # ---------- GLOBAL ----------
+
+
 current_pixmap = None
 current_base_image = None
 
@@ -336,6 +477,9 @@ manual_check = window.findChild(QCheckBox, "manualCheck")
 
 status_label = window.findChild(QLabel, "statusLabel")
 photo_list = window.findChild(QListWidget, "photoList")
+
+log_box = window.findChild(QPlainTextEdit, "logBox")
+tab_widget = window.findChild(QTabWidget, "tabWidget")
 
 # ---------- INITIAL UI ----------
 exposure_slider.setValue(0)
@@ -547,6 +691,19 @@ def on_c_pressed():
     print("Color =", color_enabled)
     process_and_display_and_save()
 
+
+def on_e_pressed():
+    export_current_image()
+
+shortcut_e = QShortcut(QKeySequence("e"), window)
+shortcut_e.activated.connect(on_e_pressed)
+
+
+def on_shift_e_pressed():
+    export_all_images()
+
+shortcut_export_all = QShortcut(QKeySequence("Shift+E"), window)
+shortcut_export_all.activated.connect(on_shift_e_pressed)
 
 # ---------- SLIDERS ----------
 def on_exposure_changed(value):
