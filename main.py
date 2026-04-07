@@ -47,6 +47,7 @@ def on_classification_changed():
         save_settings(current.data(256))
         update_status()
         update_photo_list()
+        populate_raw_list()
 
 
 def load_settings(image_path):
@@ -178,6 +179,27 @@ def update_status():
     print("current_dir:", current_dir)
     print("photos map:", photos)
     print("current_pid:", current_pid)
+
+
+def get_image_classification(image_path):
+    json_path = image_path + ".json"
+
+    if not os.path.exists(json_path):
+        return None
+
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    cls = data.get("classification")
+    if not cls:
+        return None
+
+    return {
+        "photo_id": cls.get("photo_id"),
+        "side": cls.get("side"),
+        "needs_manual": cls.get("needs_manual", False)
+    }
+
 
 
 def set_ui_without_signals():
@@ -323,15 +345,43 @@ colorfix_slider.setValue(50)
 
 
 # ---------- INSERT FILES ----------
+def populate_raw_list():
+    list_widget.clear()
+
+    for file in get_photos(base_path):
+        full_path = os.path.join(base_path, file)
+
+        cls = get_image_classification(full_path)
+
+        if cls:
+            pid = cls["photo_id"]
+            side = cls["side"]
+            manual = cls.get("needs_manual", False)
+
+            label = f"{file}  →  [{pid:03d} {side.upper()}]"
+
+            if manual:
+                label += " ⚠"
+
+        else:
+            label = f"{file}  →  [UNASSIGNED]"
+
+        item = QListWidgetItem(label)
+        item.setData(256, full_path)
+
+        # ---------- COLOR ----------
+        if not cls:
+            item.setForeground(Qt.gray)
+        elif cls.get("needs_manual"):
+            item.setForeground(Qt.red)
+        else:
+            item.setForeground(Qt.green)
+
+        list_widget.addItem(item)
+
+
 base_path = os.path.abspath(".")
-
-for file in get_photos(base_path):
-    full_path = os.path.join(base_path, file)
-
-    item = QListWidgetItem(file)
-    item.setData(256, full_path)
-    list_widget.addItem(item)
-
+populate_raw_list()
 
 # ---------- DISPLAY ----------
 def update_image():
