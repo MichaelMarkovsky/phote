@@ -1,4 +1,5 @@
 from features.raw_processing import load_raw_image
+from features.get_metadata import get_raw_metadata
 from features.perspective import detect_document, warp
 from features.rotate import rotate
 from features.color import apply_color_pipeline
@@ -469,8 +470,11 @@ color_settings = {
 
 current_image_path = None
 
+
+
 # ---------- APP ----------
 app = QApplication(sys.argv)
+app.setStyleSheet(open("style.qss").read())
 loader = QUiLoader()
 
 file = QFile('phote.ui')
@@ -501,6 +505,11 @@ photo_list = window.findChild(QListWidget, "photoList")
 
 log_box = window.findChild(QPlainTextEdit, "logBox")
 tab_widget = window.findChild(QTabWidget, "tabWidget")
+
+iso_label = window.findChild(QLabel, "isoLabel")
+shutter_label = window.findChild(QLabel, "shutterLabel")
+aperture_label = window.findChild(QLabel, "apertureLabel")
+lens_label = window.findChild(QLabel, "lensLabel")
 
 # ---------- INITIAL UI ----------
 exposure_slider.setValue(0)
@@ -631,6 +640,14 @@ def on_item_changed(current, previous):
     print("Loading:", path)
 
     current_base_image = load_raw_image(path)
+    
+    # GET METADATA
+    meta = get_raw_metadata(path)
+
+    iso_label.setText(f"ISO: {meta.get('iso', '---')}")
+    shutter_label.setText(f"Shutter: {meta.get('shutter', '---')}")
+    aperture_label.setText(f"Aperture: f/{meta.get('aperture', '---')}")
+    lens_label.setText(f"Focal: {meta.get('focal_len', '---')}mm")
 
     # load saved settings (this updates color_settings + classification internally)
     load_settings(path)
@@ -819,6 +836,9 @@ shortcut_export_all.activated.connect(on_shift_e_pressed)
 
 shortcut_open = QShortcut(QKeySequence("Ctrl+O"), window)
 shortcut_open.activated.connect(open_folder)
+
+quit_shortcut = QShortcut(QKeySequence("Q"), window)
+quit_shortcut.activated.connect(QApplication.quit)
 
 # ---------- AUTO SELECT ----------
 def select_first_item():
