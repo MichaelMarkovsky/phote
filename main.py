@@ -43,13 +43,53 @@ def save_settings(image_path):
     print("Saving JSON to:", get_settings_path(image_path))
 
 # ________ AUTO SAVE WHEN CHANGED _________
+def update_current_list_item_text():
+    current = list_widget.currentItem()
+    if not current:
+        return
+
+    path = current.data(256)
+    files = get_photos(base_path)
+    total = len(files)
+
+    try:
+        index = files.index(os.path.basename(path))
+    except ValueError:
+        index = list_widget.currentRow()
+
+    cls = get_image_classification(path)
+
+    label = f"[{index+1}/{total}] {os.path.basename(path)}"
+
+    if cls:
+        pid = cls["photo_id"]
+        side = cls["side"]
+        manual = cls.get("needs_manual", False)
+
+        label += f" → [{int(pid):03d} {side.upper()}]"
+
+        if manual:
+            label += " !"
+    else:
+        label += " → [UNASSIGNED]"
+
+    current.setText(label)
+
+    if not cls:
+        current.setForeground(Qt.gray)
+    elif cls.get("needs_manual"):
+        current.setForeground(Qt.red)
+    else:
+        current.setForeground(Qt.green)
+
+
 def on_classification_changed():
     current = list_widget.currentItem()
     if current:
         save_settings(current.data(256))
         update_status()
         update_photo_list()
-        populate_raw_list()
+        update_current_list_item_text()
 
 
 def load_settings(image_path):
@@ -686,7 +726,12 @@ def on_item_changed(current, previous):
         manual_check.setChecked(cls.get("needs_manual", False))
     else:
         # default state
-        photo_spin.setValue(1)
+        current_dir = os.path.dirname(path)
+        photos = build_photo_map(current_dir)
+
+        next_id = get_next_photo_id(photos)
+
+        photo_spin.setValue(next_id)
         side_combo.setCurrentText("Front")
         manual_check.setChecked(False)
 
