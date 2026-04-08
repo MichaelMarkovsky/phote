@@ -1,0 +1,226 @@
+/* =========================
+   GLOBAL
+========================= */
+* {
+    font-family: "Mononoki Nerd Font";
+    font-size: 12px;
+    color: #e0e0e0;
+}
+
+QMainWindow, QWidget {
+    background-color: #1e1e1e;
+}
+
+/* =========================
+   LABELS
+========================= */
+QLabel {
+    color: #dcdcdc;
+}
+
+/* Preview title */
+QLabel#previewLabel {
+    font-size: 16px;
+    font-weight: bold;
+    color: #aaaaaa;
+    padding-bottom: 5px;
+}
+
+/* Image preview box */
+QLabel#imageLabel {
+    background-color: #111;
+    border: 1px solid #333;
+    border-radius: 10px;
+}
+
+/* =========================
+   LIST (LEFT PANEL)
+========================= */
+QListWidget {
+    background-color: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 5px;
+    color: #dddddd;
+}
+
+QListWidget::item {
+    padding: 6px;
+    border-radius: 5px;
+}
+
+QListWidget::item:hover {
+    background-color: #3a3a3a;
+}
+
+QListWidget::item:selected {
+    background-color: #00adb5;
+    color: black;
+}
+
+/* =========================
+   COMBOBOX
+========================= */
+QComboBox {
+    background-color: #2a2a2a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QComboBox:hover {
+    border: 1px solid #00adb5;
+}
+
+/* =========================
+   CHECKBOX
+========================= */
+QCheckBox {
+    spacing: 6px;
+}
+
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 1px solid #555;
+    background: #222;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #00adb5;
+    border: 1px solid #00adb5;
+}
+
+/* =========================
+   TABS (Global Edits / Export Logs)
+========================= */
+QTabWidget::pane {
+    border: 1px solid #333;
+    border-radius: 8px;
+    background: #2a2a2a;
+}
+
+QTabBar::tab {
+    background: #2a2a2a;
+    padding: 6px 10px;
+    margin-right: 2px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    color: #cccccc;
+}
+
+QTabBar::tab:selected {
+    background: #00adb5;
+    color: black;
+}
+
+QTabBar::tab:hover {
+    background: #3a3a3a;
+    color: #ffffff;
+}
+
+/* =========================
+   GROUP BOX (RIGHT PANEL)
+========================= */
+QGroupBox {
+    border: 1px solid #333;
+    border-radius: 10px;
+    margin-top: 10px;
+    padding: 10px;
+    color: #aaa;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    font-weight: bold;
+    font-size: 13px;
+    color: #cccccc;
+}
+
+/* =========================
+   SLIDERS
+========================= */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #444;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: #00adb5;
+    width: 14px;
+    margin: -4px 0;
+    border-radius: 7px;
+}
+
+QSlider::handle:hover {
+    background: #00ffff;
+}
+
+/* =========================
+   SCROLLBAR
+========================= */
+QScrollBar:vertical {
+    background: #1e1e1e;
+    width: 8px;
+}
+
+QScrollBar::handle:vertical {
+    background: #444;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #00adb5;
+}
+
+/* =========================
+   BUTTONS
+========================= */
+QPushButton {
+    background-color: #2a2a2a;
+    border-radius: 8px;
+    padding: 6px;
+    border: 1px solid #333;
+    color: #ddd;
+}
+
+QPushButton:hover {
+    background-color: #3a3a3a;
+}
+
+QPushButton:pressed {
+    background-color: #00adb5;
+    color: black;
+}
+
+/* =========================
+   TEXT AREAS / LOGS
+========================= */
+QTextEdit {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 5px;
+    color: #dddddd;
+}
+
+/* =========================
+   STATUS / SMALL TEXT
+========================= */
+QLabel[role="status"] {
+    color: #888;
+    font-size: 11px;
+}
+
+
+QWidget#shortcutBar {
+    background-color: #151515;     /* darker than main */
+    border-top: 1px solid #333;
+    padding: 6px;
+}

@@ -1,0 +1,8 @@
+numpy==2.4.4
+opencv_python==4.13.0.92
+pyside6==6.11.0
+pyside6_addons==6.11.0
+pyside6_essentials==6.11.0
+rawpy==0.26.1
+
+# requires exiftool installed on system
