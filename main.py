@@ -10,12 +10,11 @@ import cv2 as cv
 import json
 
 from PySide6.QtWidgets import (
-    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider ,QComboBox, QSpinBox, QLineEdit, QCheckBox,QPlainTextEdit,QTabWidget,QFileDialog
+    QApplication, QListWidgetItem, QLabel, QListWidget, QSlider, QComboBox, QSpinBox, QLineEdit, QCheckBox, QPlainTextEdit, QTabWidget, QFileDialog
 )
 from PySide6.QtCore import QFile, Qt, QTimer
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QImage, QPixmap, QShortcut, QKeySequence
-
 
 
 # ---------- SETTINGS FILE ----------
@@ -41,6 +40,7 @@ def save_settings(image_path):
         json.dump(data, f, indent=4)
 
     print("Saving JSON to:", get_settings_path(image_path))
+
 
 # ________ AUTO SAVE WHEN CHANGED _________
 def update_current_list_item_text():
@@ -109,7 +109,7 @@ def load_settings(image_path):
 
     color_settings.update(data.get("color_settings", {}))
 
-    
+
 # __________ STATUS MAP ____________
 def build_photo_map(folder_path):
     photos = {}
@@ -133,13 +133,11 @@ def build_photo_map(folder_path):
         side = cls.get("side", "").lower()
         needs_manual = cls.get("needs_manual", False)
 
-        # ---------- SAFETY CHECK ----------
         if pid is None or side not in ("front", "back"):
             continue
 
         pid = int(pid)
 
-        # ---------- INIT ----------
         if pid not in photos:
             photos[pid] = {
                 "front": None,
@@ -147,11 +145,8 @@ def build_photo_map(folder_path):
                 "needs_manual": False
             }
 
-        # ---------- ASSIGN SIDE ----------
         photos[pid][side] = full_path
 
-        # ---------- MERGE MANUAL FLAG ----------
-        # if ANY image in this photo needs manual → whole photo needs manual
         photos[pid]["needs_manual"] = (
             photos[pid]["needs_manual"] or needs_manual
         )
@@ -160,10 +155,10 @@ def build_photo_map(folder_path):
 
     return photos
 
+
 def get_next_photo_id(photos):
     if not photos:
         return 1
-
     return max(photos.keys()) + 1
 
 
@@ -186,7 +181,6 @@ def update_status():
 
     current_pid = photo_spin.value()
 
-    # include needs_manual in default
     photo = photos.get(current_pid, {
         "front": None,
         "back": None,
@@ -197,7 +191,6 @@ def update_status():
     back_done = photo["back"] is not None
     needs_manual = photo.get("needs_manual", False)
 
-    # ---------- PRIORITY LOGIC ----------
     if needs_manual:
         status = "NEEDS MANUAL"
     elif front_done and back_done:
@@ -207,7 +200,6 @@ def update_status():
     else:
         status = "EMPTY"
 
-    # ---------- UI ----------
     status_label.setText(
         f"Photo {current_pid:03d} → {status}\n"
         f"Front: {'✔' if front_done else '✘'} | "
@@ -216,7 +208,6 @@ def update_status():
         f"Next: {get_next_photo_id(photos):03d}"
     )
 
-    # ---------- DEBUG ----------
     print("current_image_path:", current_image_path)
     print("current_dir:", current_dir)
     print("photos map:", photos)
@@ -243,18 +234,6 @@ def get_image_classification(image_path):
     }
 
 
-
-def set_ui_without_signals():
-    side_combo.blockSignals(True)
-    photo_spin.blockSignals(True)
-    manual_check.blockSignals(True)
-
-def restore_ui_signals():
-    side_combo.blockSignals(False)
-    photo_spin.blockSignals(False)
-    manual_check.blockSignals(False)
-
-
 def update_photo_list():
     if current_image_path is None:
         return
@@ -277,7 +256,6 @@ def update_photo_list():
         back = photo["back"] is not None
         needs_manual = photo.get("needs_manual", False)
 
-        # ---------- SAME PRIORITY LOGIC ----------
         if needs_manual:
             status = "NEEDS MANUAL"
         elif front and back:
@@ -287,7 +265,6 @@ def update_photo_list():
         else:
             status = "EMPTY"
 
-        # ---------- TEXT ----------
         text = (
             f"{pid:03d} | "
             f"F:{'✔' if front else '✘'} "
@@ -297,7 +274,6 @@ def update_photo_list():
 
         item = QListWidgetItem(text)
 
-        # ---------- COLORS ----------
         if needs_manual:
             item.setForeground(Qt.red)
         elif front and back:
@@ -308,10 +284,13 @@ def update_photo_list():
             item.setForeground(Qt.gray)
 
         photo_list.addItem(item)
+
+
 # ---------- GET PHOTOS ----------
 def get_photos(path):
     files = [x for x in os.listdir(path) if x.lower().endswith(".cr3")]
     return sorted(files)
+
 
 # ---------- NUMPY to QPIXMAP ----------
 def numpy_to_qpixmap(img):
@@ -331,7 +310,6 @@ def numpy_to_qpixmap(img):
     return QPixmap.fromImage(q_image)
 
 
-
 # ________ EXPORT ________
 def export_current_image():
     if current_base_image is None:
@@ -341,14 +319,8 @@ def export_current_image():
     pid = photo_spin.value()
     side = side_combo.currentText().lower()
 
-    img = current_base_image.copy()
-
-    if perspective_enabled:
-        try:
-            pts = detect_document(img)
-            img = warp(img, pts)
-        except Exception as e:
-            log(f"! Perspective failed: {e}")
+    # Use cached perspective if available, avoids re-detection
+    img = get_perspective_image()
 
     for _ in range(rotation_steps % 4):
         img = rotate(img)
@@ -362,7 +334,7 @@ def export_current_image():
     folder = os.path.join(output_dir, f"{pid:03d}")
     os.makedirs(folder, exist_ok=True)
 
-    filename = f"{pid:03d} - {side}.png"
+    filename = f"{pid:03d} - {side}.jpg"
     path = os.path.join(folder, filename)
 
     if os.path.exists(path):
@@ -398,21 +370,18 @@ def export_all_images():
         log(f"[{i+1}/{total}] ({percent}%) Processing {file}")
         QApplication.processEvents()
 
-        # ---------- CHECK JSON ----------
         if not os.path.exists(json_path):
             log(f"[{i+1}/{total}] ! Skipped (no JSON)")
             skipped_other += 1
             QApplication.processEvents()
             continue
 
-        # ---------- LOAD JSON ----------
         with open(json_path, "r") as f:
             data = json.load(f)
 
         cls = data.get("classification", {})
         pid = cls.get("photo_id")
         side = cls.get("side", "").lower()
-
         needs_manual = cls.get("needs_manual", False)
 
         if needs_manual:
@@ -429,10 +398,8 @@ def export_all_images():
 
         pid = int(pid)
 
-        # ---------- LOAD IMAGE ----------
         img = load_raw_image(full_path)
 
-        # ---------- APPLY SETTINGS ----------
         if data.get("perspective", False):
             try:
                 pts = detect_document(img)
@@ -441,6 +408,7 @@ def export_all_images():
                 log(f"[{i+1}/{total}] ! Perspective failed: {e}")
                 skipped_other += 1
                 QApplication.processEvents()
+                continue
 
         rotation_steps_local = data.get("rotation", 0)
         for _ in range(rotation_steps_local % 4):
@@ -450,24 +418,21 @@ def export_all_images():
             color_settings_local = data.get("color_settings", {})
             img = apply_color_pipeline(img, **color_settings_local)
 
-        # ---------- OUTPUT PATH ----------
         current_dir = os.path.dirname(full_path)
         output_dir = os.path.join(current_dir, "Edited", "Black and White")
 
         folder = os.path.join(output_dir, f"{pid:03d}")
         os.makedirs(folder, exist_ok=True)
 
-        filename = f"{pid:03d} - {side}.png"
+        filename = f"{pid:03d} - {side}.jpg"
         output_path = os.path.join(folder, filename)
 
-        # ---------- PREVENT OVERWRITE ----------
         if os.path.exists(output_path):
             log(f"[{i+1}/{total}] ! Skipped (already exists)")
             skipped_other += 1
             QApplication.processEvents()
             continue
 
-        # ---------- SAVE ----------
         cv.imwrite(output_path, img)
         log(f"[{i+1}/{total}] ✔ Exported → {filename}")
         exported += 1
@@ -482,19 +447,16 @@ def export_all_images():
 
 # _________ LOGS ____________
 def log(message):
-    print(message)  # keep console (optional)
-
+    print(message)
     log_box.appendPlainText(message)
-
-    # auto-scroll
     scrollbar = log_box.verticalScrollBar()
     scrollbar.setValue(scrollbar.maximum())
 
-# ---------- GLOBAL ----------
 
-
+# ---------- GLOBALS ----------
 current_pixmap = None
 current_base_image = None
+current_perspective_image = None   # cached warp result
 
 rotation_steps = 0
 perspective_enabled = False
@@ -510,6 +472,37 @@ color_settings = {
 
 current_image_path = None
 
+
+# ---------- PERSPECTIVE CACHE ----------
+def invalidate_perspective_cache():
+    global current_perspective_image
+    current_perspective_image = None
+
+
+def get_perspective_image():
+    """
+    Returns warped image if perspective is enabled.
+    Runs detection once and caches — rotation/color/sliders never re-detect.
+    """
+    global current_perspective_image
+
+    if not perspective_enabled:
+        return current_base_image.copy()
+
+    if current_perspective_image is not None:
+        return current_perspective_image.copy()   # cache hit
+
+    # cache miss — detect and warp once
+    img = current_base_image.copy()
+    try:
+        pts = detect_document(img)
+        img = warp(img, pts)
+        print("Perspective: detection ran, result cached")
+    except Exception as e:
+        print("Perspective failed:", e)
+
+    current_perspective_image = img
+    return current_perspective_image.copy()
 
 
 # ---------- APP ----------
@@ -570,10 +563,8 @@ def populate_raw_list():
 
         cls = get_image_classification(full_path)
 
-        # ---------- BASE LABEL ----------
         label = f"[{index+1}/{total}] {file}"
 
-        # ---------- CLASSIFICATION ----------
         if cls:
             pid = cls["photo_id"]
             side = cls["side"]
@@ -589,7 +580,6 @@ def populate_raw_list():
         item = QListWidgetItem(label)
         item.setData(256, full_path)
 
-        # ---------- COLOR ----------
         if not cls:
             item.setForeground(Qt.gray)
         elif cls.get("needs_manual"):
@@ -599,8 +589,10 @@ def populate_raw_list():
 
         list_widget.addItem(item)
 
+
 base_path = os.path.abspath(".")
 populate_raw_list()
+
 
 # ---------- DISPLAY ----------
 def update_image():
@@ -623,21 +615,8 @@ def process_and_display():
     if current_base_image is None:
         return
 
-    img = current_base_image.copy()
-
-    # Downscale preview
-    h, w = img.shape[:2]
-    scale = 1000 / max(h, w)
-    if scale < 1:
-        img = cv.resize(img, (int(w * scale), int(h * scale)))
-
-    # Perspective
-    if perspective_enabled:
-        try:
-            pts = detect_document(img)
-            img = warp(img, pts)
-        except Exception as e:
-            print("Perspective failed:", e)
+    # Perspective — uses cache, never re-detects unless invalidated
+    img = get_perspective_image()
 
     # Rotation
     for _ in range(rotation_steps % 4):
@@ -653,6 +632,12 @@ def process_and_display():
             contrast=color_settings["contrast"],
             exposure=color_settings["exposure"]
         )
+
+    # Downscale ONLY for display
+    h, w = img.shape[:2]
+    scale = 2000 / max(h, w)
+    if scale < 1:
+        img = cv.resize(img, (int(w * scale), int(h * scale)))
 
     current_pixmap = numpy_to_qpixmap(img)
     update_image()
@@ -680,7 +665,8 @@ def on_item_changed(current, previous):
     print("Loading:", path)
 
     current_base_image = load_raw_image(path)
-    
+    invalidate_perspective_cache()   # new image → clear cached warp
+
     # GET METADATA
     meta = get_raw_metadata(path)
 
@@ -689,7 +675,6 @@ def on_item_changed(current, previous):
     aperture_label.setText(f"Aperture: f/{meta.get('aperture', '---')}")
     lens_label.setText(f"Focal: {meta.get('focal_len', '---')}mm")
 
-    # load saved settings (this updates color_settings + classification internally)
     load_settings(path)
 
     # ---------- BLOCK SIGNALS ----------
@@ -719,13 +704,11 @@ def on_item_changed(current, previous):
 
         photo_spin.setValue(int(cls.get("photo_id", 1)))
 
-        # IMPORTANT: UI uses "Front"/"Back", JSON uses lowercase
         side = cls.get("side", "front").capitalize()
         side_combo.setCurrentText(side)
 
         manual_check.setChecked(cls.get("needs_manual", False))
     else:
-        # default state
         current_dir = os.path.dirname(path)
         photos = build_photo_map(current_dir)
 
@@ -749,7 +732,7 @@ def on_item_changed(current, previous):
     process_and_display()
 
     # ---------- STATUS ----------
-    update_status()   
+    update_status()
     update_photo_list()
 
 
@@ -757,6 +740,7 @@ def on_item_changed(current, previous):
 def on_enter_pressed():
     global perspective_enabled
     perspective_enabled = not perspective_enabled
+    invalidate_perspective_cache()   # force re-detect on next display
     print("Perspective =", perspective_enabled)
     process_and_display_and_save()
 
@@ -779,11 +763,8 @@ def on_e_pressed():
     export_current_image()
 
 
-
-
 def on_shift_e_pressed():
     export_all_images()
-
 
 
 def open_folder():
@@ -792,7 +773,7 @@ def open_folder():
     folder = QFileDialog.getExistingDirectory(
         window,
         "Select Folder",
-        base_path  # start location
+        base_path
     )
 
     if not folder:
@@ -801,15 +782,11 @@ def open_folder():
     base_path = folder
     log(f"Opened folder: {base_path}")
 
-    # reload everything
     populate_raw_list()
     update_photo_list()
 
-    # auto select first image
     if list_widget.count() > 0:
         list_widget.setCurrentRow(0)
-
-
 
 
 # ---------- SLIDERS ----------
@@ -859,11 +836,11 @@ side_combo.currentTextChanged.connect(on_classification_changed)
 photo_spin.valueChanged.connect(on_classification_changed)
 manual_check.stateChanged.connect(on_classification_changed)
 
+
 # ---------- SHORTCUTS ----------
 shortcut = QShortcut(QKeySequence("Return"), window)
 shortcut.setContext(Qt.ApplicationShortcut)
 shortcut.activated.connect(on_enter_pressed)
-
 
 shortcut_r = QShortcut(QKeySequence("R"), window)
 shortcut_r.setContext(Qt.ApplicationShortcut)
@@ -884,6 +861,7 @@ shortcut_open.activated.connect(open_folder)
 
 quit_shortcut = QShortcut(QKeySequence("Q"), window)
 quit_shortcut.activated.connect(QApplication.quit)
+
 
 # ---------- AUTO SELECT ----------
 def select_first_item():
