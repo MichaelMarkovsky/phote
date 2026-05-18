@@ -1,6 +1,6 @@
 # phote - Photo Digitization Editor
 > A smart photo editor focused on digitizing, organizing, and restoring physical photos.
-<img width="1513" height="851" alt="thumbnail" src="https://github.com/user-attachments/assets/64db408e-987a-4b26-96e5-296efd43ec1f" />
+<img width="1513" height="851" alt="thumbnail" src="./assets/phote_thumbnail.jpg" />
 Demo video: https://github.com/user-attachments/assets/2c9bb5de-4e0b-4b88-a9c3-3bf5a41cce53
 
 ---
